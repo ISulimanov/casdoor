@@ -288,6 +288,10 @@ func generateJwtToken(application *Application, user *User, nonce string, scope 
 	return tokenString, refreshTokenString, name, err
 }
 
+func generateSubscriptionToken(application *Application, user *User, nonce string, scope string, host string) (string, string, string, error) {
+	return generateJwtToken(application, user, nonce, scope, host)
+}
+
 func ParseJwtToken(token string, cert *Cert) (*Claims, error) {
 	t, err := jwt.ParseWithClaims(token, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {

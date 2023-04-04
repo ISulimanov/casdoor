@@ -119,13 +119,13 @@ func UpdateSubscription(id string, subscription *Subscription) bool {
 		var app = GetApplicationByUser(u)
 		var scope = ""
 		var host = "localhost:8000"
-		accessToken, _, _, err := generateJwtToken(app, u, "", scope, host)
+		subscriptionToken, _, _, err := generateSubscriptionToken(app, u, "", scope, host)
 
 		if err != nil {
 			panic(err)
 		}
 
-		subscription.Key = accessToken
+		subscription.Key = subscriptionToken
 	}
 
 	affected, err := adapter.Engine.ID(core.PK{owner, name}).AllCols().Update(subscription)
