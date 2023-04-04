@@ -119,7 +119,7 @@ func UpdateSubscription(id string, subscription *Subscription) bool {
 		var app = GetApplicationByUser(u)
 		var scope = ""
 		var host = "localhost:8000"
-		subscriptionToken, _, _, err := generateSubscriptionToken(app, u, "", scope, host)
+		subscriptionToken, err := generateSubscriptionToken(app, u, subscription, "", scope, host)
 
 		if err != nil {
 			panic(err)
