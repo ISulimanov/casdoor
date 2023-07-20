@@ -423,9 +423,15 @@ func (c *ApiController) SetPassword() {
 		return
 	}
 
-	userId := util.GetId(userOwner, userName)
-
+	var userId string
 	requestUserId := c.GetSessionUsername()
+	if userOwner != "" && userName != "" {
+		userId = util.GetId(userOwner, userName)
+		if requestUserId == "" {
+			requestUserId = userId
+		}
+	}
+
 	if requestUserId == "" && code == "" {
 		c.ResponseError(c.T("general:Please login first"), "Please login first")
 		return
@@ -469,7 +475,6 @@ func (c *ApiController) SetPassword() {
 		c.ResponseError(err.Error())
 		return
 	}
-
 	c.ResponseOk()
 }
 

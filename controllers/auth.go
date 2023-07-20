@@ -40,12 +40,12 @@ var (
 	lock           sync.RWMutex
 )
 
-func codeToResponse(code *object.Code) *Response {
+func codeToResponse(code *object.Code, passwordChangeRequired bool) *Response {
 	if code.Code == "" {
 		return &Response{Status: "error", Msg: code.Message, Data: code.Code}
 	}
 
-	return &Response{Status: "ok", Msg: "", Data: code.Code}
+	return &Response{Status: "ok", Msg: "", Data: code.Code, Data2: passwordChangeRequired}
 }
 
 func tokenToResponse(token *object.Token) *Response {
@@ -58,6 +58,7 @@ func tokenToResponse(token *object.Token) *Response {
 // HandleLoggedIn ...
 func (c *ApiController) HandleLoggedIn(application *object.Application, user *object.User, form *form.AuthForm) (resp *Response) {
 	userId := user.GetId()
+	passwordChangeRequired := user.PasswordChangeRequired
 
 	allowed, err := object.CheckAccessPermission(userId, application)
 	if err != nil {
@@ -79,9 +80,12 @@ func (c *ApiController) HandleLoggedIn(application *object.Application, user *ob
 	}
 
 	if form.Type == ResponseTypeLogin {
-		c.SetSessionUsername(userId)
+		if !passwordChangeRequired {
+			c.SetSessionUsername(userId)
+		}
 		util.LogInfo(c.Ctx, "API: [%s] signed in", userId)
-		resp = &Response{Status: "ok", Msg: "", Data: userId}
+
+		resp = &Response{Status: "ok", Msg: "", Data: userId, Data2: passwordChangeRequired}
 	} else if form.Type == ResponseTypeCode {
 		clientId := c.Input().Get("clientId")
 		responseType := c.Input().Get("responseType")
@@ -102,9 +106,9 @@ func (c *ApiController) HandleLoggedIn(application *object.Application, user *ob
 			return
 		}
 
-		resp = codeToResponse(code)
+		resp = codeToResponse(code, passwordChangeRequired)
 
-		if application.EnableSigninSession || application.HasPromptPage() {
+		if (application.EnableSigninSession || application.HasPromptPage()) && !passwordChangeRequired {
 			// The prompt page needs the user to be signed in
 			c.SetSessionUsername(userId)
 		}
@@ -140,8 +144,7 @@ func (c *ApiController) HandleLoggedIn(application *object.Application, user *ob
 				resp.Data = st
 			}
 		}
-
-		if application.EnableSigninSession || application.HasPromptPage() {
+		if application.EnableSigninSession || application.HasPromptPage() && !passwordChangeRequired {
 			// The prompt page needs the user to be signed in
 			c.SetSessionUsername(userId)
 		}
@@ -245,7 +248,7 @@ func isProxyProviderType(providerType string) bool {
 // @Param nonce     query    string  false nonce
 // @Param code_challenge_method   query    string  false code_challenge_method
 // @Param code_challenge          query    string  false code_challenge
-// @Param   form   body   controllers.AuthForm  true        "Login information"
+// @Param   form   body   form.AuthForm  true        "Login information"
 // @Success 200 {object} controllers.Response The Response object
 // @router /login [post]
 func (c *ApiController) Login() {

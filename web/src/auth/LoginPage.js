@@ -32,10 +32,10 @@ import i18next from "i18next";
 import CustomGithubCorner from "../common/CustomGithubCorner";
 import {SendCodeInput} from "../common/SendCodeInput";
 import LanguageSelect from "../common/select/LanguageSelect";
-import {CaptchaModal} from "../common/modal/CaptchaModal";
-import {CaptchaRule} from "../common/modal/CaptchaModal";
+import {CaptchaModal, CaptchaRule} from "../common/modal/CaptchaModal";
 import RedirectForm from "../common/RedirectForm";
 import {MfaAuthVerifyForm, NextMfa, RequiredMfa} from "./mfa/MfaAuthVerifyForm";
+import {ChangePasswordForm} from "./ChangePasswordForm";
 
 class LoginPage extends React.Component {
   constructor(props) {
@@ -358,10 +358,47 @@ class LoginPage extends React.Component {
         .then((res) => {
           const callback = (res) => {
             const responseType = values["type"];
+            if (responseType !== "saml" && res.data2 === true) {
+              this.setState({getVerifyTotp: undefined});
+
+              this.setState({
+                values: values,
+                getChangePasswordForm: () => {
+                  return (
+                    <React.Fragment>
+                      <h1 style={{fontSize: "28px", fontWeight: "400", marginTop: "10px", marginBottom: "40px"}}>{i18next.t("changePassword:Change password")}</h1>
+                      <Row type="flex" justify="center" align="middle">
+                        <Col span={16} style={{width: 600}}>
+                          <ChangePasswordForm
+                            application={this.getApplicationObj()}
+                            userOwner={values.organization}
+                            userName={this.state.username}
+                            onSuccess={(result) => {
+                              this.login({...this.state.values, username: this.state.username, password: result.newPassword});
+                              this.setState({values: undefined});
+                            }}
+                            onFail={(res) => {
+                              Setting.showMessage("error", i18next.t(`signup:${res.msg}`));
+                            }}
+                          />
+                        </Col>
+                      </Row>
+                    </React.Fragment>);
+                },
+              });
+
+              return;
+            }
 
             if (responseType === "login") {
-              Setting.showMessage("success", i18next.t("application:Logged in successfully"));
-              this.props.onLoginSuccess();
+              if (res.msg === RequiredMfa) {
+                Setting.goToLink(`/prompt/${this.getApplicationObj().name}?promptType=mfa`);
+              } else {
+                Setting.showMessage("success", i18next.t("application:Logged in successfully"));
+                this.props.onLoginSuccess();
+                const link = Setting.getFromLink();
+                Setting.goToLink(link);
+              }
             } else if (responseType === "code") {
               this.postCodeLoginAction(res);
             } else if (responseType === "token" || responseType === "id_token") {
@@ -457,7 +494,6 @@ class LoginPage extends React.Component {
         <Form
           name="normal_login"
           initialValues={{
-
             organization: application.organization,
             application: application.name,
             autoSignin: true,
@@ -588,7 +624,7 @@ class LoginPage extends React.Component {
                 {application.displayName}
               </span>
             </a>
-              :
+            :
           </div>
           <br />
           {
@@ -841,6 +877,8 @@ class LoginPage extends React.Component {
 
     if (this.state.getVerifyTotp !== undefined) {
       return this.state.getVerifyTotp();
+    } else if (this.state.getChangePasswordForm !== undefined) {
+      return this.state.getChangePasswordForm();
     } else {
       return (
         <React.Fragment>
