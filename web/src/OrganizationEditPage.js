@@ -24,6 +24,7 @@ import {LinkOutlined} from "@ant-design/icons";
 import LdapTable from "./table/LdapTable";
 import AccountTable from "./table/AccountTable";
 import ThemeEditor from "./common/theme/ThemeEditor";
+import MfaTable from "./table/MfaTable";
 
 const {Option} = Select;
 
@@ -48,18 +49,33 @@ class OrganizationEditPage extends React.Component {
 
   getOrganization() {
     OrganizationBackend.getOrganization("admin", this.state.organizationName)
-      .then((organization) => {
-        this.setState({
-          organization: organization,
-        });
+      .then((res) => {
+        if (res.status === "ok") {
+          const organization = res.data;
+          if (organization === null) {
+            this.props.history.push("/404");
+            return;
+          }
+
+          this.setState({
+            organization: organization,
+          });
+        } else {
+          Setting.showMessage("error", res.msg);
+        }
       });
   }
 
   getApplications() {
     ApplicationBackend.getApplicationsByOrganization("admin", this.state.organizationName)
-      .then((applications) => {
+      .then((res) => {
+        if (res.status === "error") {
+          Setting.showMessage("error", res.msg);
+          return;
+        }
+
         this.setState({
-          applications: applications,
+          applications: res,
         });
       });
   }
@@ -182,6 +198,29 @@ class OrganizationEditPage extends React.Component {
             }} />
           </Col>
         </Row>
+        <Row style={{marginTop: "20px"}}>
+          <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
+            {Setting.getLabel(i18next.t("general:Password complexity options"), i18next.t("general:Password complexity options - Tooltip"))} :
+          </Col>
+          <Col span={22} >
+            <Select
+              virtual={false}
+              style={{width: "100%"}}
+              mode="multiple"
+              value={this.state.organization.passwordOptions}
+              onChange={(value => {
+                this.updateOrganizationField("passwordOptions", value);
+              })}
+              options={[
+                {value: "AtLeast6", name: i18next.t("user:The password must have at least 6 characters")},
+                {value: "AtLeast8", name: i18next.t("user:The password must have at least 8 characters")},
+                {value: "Aa123", name: i18next.t("user:The password must contain at least one uppercase letter, one lowercase letter and one digit")},
+                {value: "SpecialChar", name: i18next.t("user:The password must contain at least one special character")},
+                {value: "NoRepeat", name: i18next.t("user:The password must not contain any repeated characters")},
+              ].map((item) => Setting.getOption(item.name, item.value))}
+            />
+          </Col>
+        </Row>
         <Row style={{marginTop: "20px"}} >
           <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
             {Setting.getLabel(i18next.t("general:Supported country codes"), i18next.t("general:Supported country codes - Tooltip"))} :
@@ -196,6 +235,22 @@ class OrganizationEditPage extends React.Component {
               {
                 Setting.getCountryCodeData().map((country) => Setting.getCountryCodeOption(country))
               }
+            </Select>
+          </Col>
+        </Row>
+        <Row style={{marginTop: "20px"}} >
+          <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
+            {Setting.getLabel(i18next.t("general:Languages"), i18next.t("general:Languages - Tooltip"))} :
+          </Col>
+          <Col span={22} >
+            <Select virtual={false} mode="multiple" style={{width: "100%"}}
+              options={Setting.Countries.map((item) => {
+                return Setting.getOption(item.label, item.key);
+              })}
+              value={this.state.organization.languages ?? []}
+              onChange={(value => {
+                this.updateOrganizationField("languages", value);
+              })} >
             </Select>
           </Col>
         </Row>
@@ -259,22 +314,6 @@ class OrganizationEditPage extends React.Component {
           </Col>
         </Row>
         <Row style={{marginTop: "20px"}} >
-          <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
-            {Setting.getLabel(i18next.t("general:Languages"), i18next.t("general:Languages - Tooltip"))} :
-          </Col>
-          <Col span={22} >
-            <Select virtual={false} mode="tags" style={{width: "100%"}}
-              options={Setting.Countries.map((item) => {
-                return Setting.getOption(item.label, item.key);
-              })}
-              value={this.state.organization.languages ?? []}
-              onChange={(value => {
-                this.updateOrganizationField("languages", value);
-              })} >
-            </Select>
-          </Col>
-        </Row>
-        <Row style={{marginTop: "20px"}} >
           <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 19 : 2}>
             {Setting.getLabel(i18next.t("organization:Init score"), i18next.t("organization:Init score - Tooltip"))} :
           </Col>
@@ -313,6 +352,18 @@ class OrganizationEditPage extends React.Component {
               title={i18next.t("organization:Account items")}
               table={this.state.organization.accountItems}
               onUpdateTable={(value) => {this.updateOrganizationField("accountItems", value);}}
+            />
+          </Col>
+        </Row>
+        <Row style={{marginTop: "20px"}} >
+          <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
+            {Setting.getLabel(i18next.t("general:MFA items"), i18next.t("general:MFA items - Tooltip"))} :
+          </Col>
+          <Col span={22} >
+            <MfaTable
+              title={i18next.t("general:MFA items")}
+              table={this.state.organization.mfaItems ?? []}
+              onUpdateTable={(value) => {this.updateOrganizationField("mfaItems", value);}}
             />
           </Col>
         </Row>
@@ -376,6 +427,7 @@ class OrganizationEditPage extends React.Component {
           this.setState({
             organizationName: this.state.organization.name,
           });
+          window.dispatchEvent(new Event("storageOrganizationsChanged"));
 
           if (willExist) {
             this.props.history.push("/organizations");
@@ -397,6 +449,7 @@ class OrganizationEditPage extends React.Component {
       .then((res) => {
         if (res.status === "ok") {
           this.props.history.push("/organizations");
+          window.dispatchEvent(new Event("storageOrganizationsChanged"));
         } else {
           Setting.showMessage("error", `${i18next.t("general:Failed to delete")}: ${res.msg}`);
         }

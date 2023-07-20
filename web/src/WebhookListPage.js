@@ -25,11 +25,12 @@ import PopconfirmModal from "./common/modal/PopconfirmModal";
 class WebhookListPage extends BaseListPage {
   newWebhook() {
     const randomName = Setting.getRandomName();
+    const organizationName = Setting.getRequestOrganization(this.props.account);
     return {
       owner: "admin", // this.props.account.webhookname,
       name: `webhook_${randomName}`,
       createdTime: moment().format(),
-      organization: this.props.account.owner,
+      organization: organizationName,
       url: "https://example.com/callback",
       method: "POST",
       contentType: "application/json",
@@ -240,11 +241,13 @@ class WebhookListPage extends BaseListPage {
       value = params.contentType;
     }
     this.setState({loading: true});
-    WebhookBackend.getWebhooks("admin", Setting.isAdminUser(this.props.account) ? "" : this.props.account.owner, params.pagination.current, params.pagination.pageSize, field, value, sortField, sortOrder)
+    WebhookBackend.getWebhooks("admin", Setting.isDefaultOrganizationSelected(this.props.account) ? "" : Setting.getRequestOrganization(this.props.account), params.pagination.current, params.pagination.pageSize, field, value, sortField, sortOrder)
       .then((res) => {
+        this.setState({
+          loading: false,
+        });
         if (res.status === "ok") {
           this.setState({
-            loading: false,
             data: res.data,
             pagination: {
               ...params.pagination,
@@ -256,9 +259,10 @@ class WebhookListPage extends BaseListPage {
         } else {
           if (Setting.isResponseDenied(res)) {
             this.setState({
-              loading: false,
               isAuthorized: false,
             });
+          } else {
+            Setting.showMessage("error", res.msg);
           }
         }
       });

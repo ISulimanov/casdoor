@@ -37,14 +37,51 @@ func (c *ApiController) GetOrganizations() {
 	value := c.Input().Get("value")
 	sortField := c.Input().Get("sortField")
 	sortOrder := c.Input().Get("sortOrder")
+	organizationName := c.Input().Get("organizationName")
+
+	isGlobalAdmin := c.IsGlobalAdmin()
 	if limit == "" || page == "" {
-		c.Data["json"] = object.GetMaskedOrganizations(object.GetOrganizations(owner))
+		var maskedOrganizations []*object.Organization
+		var err error
+
+		if isGlobalAdmin {
+			maskedOrganizations, err = object.GetMaskedOrganizations(object.GetOrganizations(owner))
+		} else {
+			maskedOrganizations, err = object.GetMaskedOrganizations(object.GetOrganizations(owner, c.getCurrentUser().Owner))
+		}
+
+		if err != nil {
+			c.ResponseError(err.Error())
+			return
+		}
+
+		c.Data["json"] = maskedOrganizations
 		c.ServeJSON()
 	} else {
-		limit := util.ParseInt(limit)
-		paginator := pagination.SetPaginator(c.Ctx, limit, int64(object.GetOrganizationCount(owner, field, value)))
-		organizations := object.GetMaskedOrganizations(object.GetPaginationOrganizations(owner, paginator.Offset(), limit, field, value, sortField, sortOrder))
-		c.ResponseOk(organizations, paginator.Nums())
+		if !isGlobalAdmin {
+			maskedOrganizations, err := object.GetMaskedOrganizations(object.GetOrganizations(owner, c.getCurrentUser().Owner))
+			if err != nil {
+				c.ResponseError(err.Error())
+				return
+			}
+			c.ResponseOk(maskedOrganizations)
+		} else {
+			limit := util.ParseInt(limit)
+			count, err := object.GetOrganizationCount(owner, field, value)
+			if err != nil {
+				c.ResponseError(err.Error())
+				return
+			}
+
+			paginator := pagination.SetPaginator(c.Ctx, limit, count)
+			organizations, err := object.GetMaskedOrganizations(object.GetPaginationOrganizations(owner, organizationName, paginator.Offset(), limit, field, value, sortField, sortOrder))
+			if err != nil {
+				c.ResponseError(err.Error())
+				return
+			}
+
+			c.ResponseOk(organizations, paginator.Nums())
+		}
 	}
 }
 
@@ -57,9 +94,13 @@ func (c *ApiController) GetOrganizations() {
 // @router /get-organization [get]
 func (c *ApiController) GetOrganization() {
 	id := c.Input().Get("id")
+	maskedOrganization, err := object.GetMaskedOrganization(object.GetOrganization(id))
+	if err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
 
-	c.Data["json"] = object.GetMaskedOrganization(object.GetOrganization(id))
-	c.ServeJSON()
+	c.ResponseOk(maskedOrganization)
 }
 
 // UpdateOrganization ...
@@ -99,8 +140,13 @@ func (c *ApiController) AddOrganization() {
 		return
 	}
 
-	count := object.GetOrganizationCount("", "", "")
-	if err := checkQuotaForOrganization(count); err != nil {
+	count, err := object.GetOrganizationCount("", "", "")
+	if err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
+
+	if err = checkQuotaForOrganization(int(count)); err != nil {
 		c.ResponseError(err.Error())
 		return
 	}
@@ -147,4 +193,22 @@ func (c *ApiController) GetDefaultApplication() {
 
 	maskedApplication := object.GetMaskedApplication(application, userId)
 	c.ResponseOk(maskedApplication)
+}
+
+// GetOrganizationNames ...
+// @Title GetOrganizationNames
+// @Tag Organization API
+// @Param   owner     query    string    true   "owner"
+// @Description get all organization name and displayName
+// @Success 200 {array} object.Organization The Response object
+// @router /get-organization-names [get]
+func (c *ApiController) GetOrganizationNames() {
+	owner := c.Input().Get("owner")
+	organizationNames, err := object.GetOrganizationsByFields(owner, []string{"name", "display_name"}...)
+	if err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
+
+	c.ResponseOk(organizationNames)
 }

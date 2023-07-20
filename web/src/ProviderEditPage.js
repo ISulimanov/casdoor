@@ -49,10 +49,21 @@ class ProviderEditPage extends React.Component {
 
   getProvider() {
     ProviderBackend.getProvider(this.state.owner, this.state.providerName)
-      .then((provider) => {
-        this.setState({
-          provider: provider,
-        });
+      .then((res) => {
+        if (res === null) {
+          this.props.history.push("/404");
+          return;
+        }
+
+        if (res.status === "ok") {
+          const provider = res.data;
+          provider.userMapping = provider.userMapping || {};
+          this.setState({
+            provider: provider,
+          });
+        } else {
+          Setting.showMessage("error", res.msg);
+        }
       });
   }
 
@@ -84,6 +95,40 @@ class ProviderEditPage extends React.Component {
     });
   }
 
+  updateUserMappingField(key, value) {
+    const provider = this.state.provider;
+    provider.userMapping[key] = value;
+    this.setState({
+      provider: provider,
+    });
+  }
+
+  renderUserMappingInput() {
+    return (
+      <React.Fragment>
+        {Setting.getLabel(i18next.t("general:ID"), i18next.t("general:ID - Tooltip"))} :
+        <Input value={this.state.provider.userMapping.id} onChange={e => {
+          this.updateUserMappingField("id", e.target.value);
+        }} />
+        {Setting.getLabel(i18next.t("signup:Username"), i18next.t("signup:Username - Tooltip"))} :
+        <Input value={this.state.provider.userMapping.username} onChange={e => {
+          this.updateUserMappingField("username", e.target.value);
+        }} />
+        {Setting.getLabel(i18next.t("general:Display name"), i18next.t("general:Display name - Tooltip"))} :
+        <Input value={this.state.provider.userMapping.displayName} onChange={e => {
+          this.updateUserMappingField("displayName", e.target.value);
+        }} />
+        {Setting.getLabel(i18next.t("general:Email"), i18next.t("general:Email - Tooltip"))} :
+        <Input value={this.state.provider.userMapping.email} onChange={e => {
+          this.updateUserMappingField("email", e.target.value);
+        }} />
+        {Setting.getLabel(i18next.t("general:Avatar"), i18next.t("general:Avatar - Tooltip"))} :
+        <Input value={this.state.provider.userMapping.avatarUrl} onChange={e => {
+          this.updateUserMappingField("avatarUrl", e.target.value);
+        }} />
+      </React.Fragment>
+    );
+  }
   getClientIdLabel(provider) {
     switch (provider.category) {
     case "Email":
@@ -191,7 +236,10 @@ class ProviderEditPage extends React.Component {
         tooltip = i18next.t("provider:Agent ID - Tooltip");
       }
     } else if (provider.category === "SMS") {
-      if (provider.type === "Tencent Cloud SMS") {
+      if (provider.type === "Twilio SMS") {
+        text = i18next.t("provider:Sender number");
+        tooltip = i18next.t("provider:Sender number - Tooltip");
+      } else if (provider.type === "Tencent Cloud SMS") {
         text = i18next.t("provider:App ID");
         tooltip = i18next.t("provider:App ID - Tooltip");
       } else if (provider.type === "Volc Engine SMS") {
@@ -305,7 +353,7 @@ class ProviderEditPage extends React.Component {
               } else if (value === "SAML") {
                 this.updateProviderField("type", "Aliyun IDaaS");
               } else if (value === "Payment") {
-                this.updateProviderField("type", "Alipay");
+                this.updateProviderField("type", "PayPal");
               } else if (value === "Captcha") {
                 this.updateProviderField("type", "Default");
               } else if (value === "AI") {
@@ -341,7 +389,7 @@ class ProviderEditPage extends React.Component {
               }
               if (value === "Custom") {
                 this.updateProviderField("customAuthUrl", "https://door.casdoor.com/login/oauth/authorize");
-                this.updateProviderField("customScope", "openid profile email");
+                this.updateProviderField("scopes", "openid profile email");
                 this.updateProviderField("customTokenUrl", "https://door.casdoor.com/api/login/oauth/access_token");
                 this.updateProviderField("customUserInfoUrl", "https://door.casdoor.com/api/userinfo");
               }
@@ -409,21 +457,21 @@ class ProviderEditPage extends React.Component {
               </Row>
               <Row style={{marginTop: "20px"}} >
                 <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
-                  {Setting.getLabel(i18next.t("provider:Scope"), i18next.t("provider:Scope - Tooltip"))}
-                </Col>
-                <Col span={22} >
-                  <Input value={this.state.provider.customScope} onChange={e => {
-                    this.updateProviderField("customScope", e.target.value);
-                  }} />
-                </Col>
-              </Row>
-              <Row style={{marginTop: "20px"}} >
-                <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
                   {Setting.getLabel(i18next.t("provider:Token URL"), i18next.t("provider:Token URL - Tooltip"))}
                 </Col>
                 <Col span={22} >
                   <Input value={this.state.provider.customTokenUrl} onChange={e => {
                     this.updateProviderField("customTokenUrl", e.target.value);
+                  }} />
+                </Col>
+              </Row>
+              <Row style={{marginTop: "20px"}} >
+                <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
+                  {Setting.getLabel(i18next.t("provider:Scope"), i18next.t("provider:Scope - Tooltip"))}
+                </Col>
+                <Col span={22} >
+                  <Input value={this.state.provider.scopes} onChange={e => {
+                    this.updateProviderField("scopes", e.target.value);
                   }} />
                 </Col>
               </Row>
@@ -435,6 +483,14 @@ class ProviderEditPage extends React.Component {
                   <Input value={this.state.provider.customUserInfoUrl} onChange={e => {
                     this.updateProviderField("customUserInfoUrl", e.target.value);
                   }} />
+                </Col>
+              </Row>
+              <Row style={{marginTop: "20px"}} >
+                <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
+                  {Setting.getLabel(i18next.t("provider:User mapping"), i18next.t("provider:User mapping - Tooltip"))} :
+                </Col>
+                <Col span={22} >
+                  {this.renderUserMappingInput()}
                 </Col>
               </Row>
               <Row style={{marginTop: "20px"}} >
@@ -621,6 +677,7 @@ class ProviderEditPage extends React.Component {
             ) : null}
           </div>
         ) : null}
+        {this.getAppIdRow(this.state.provider)}
         {
           this.state.provider.category === "Email" ? (
             <React.Fragment>
@@ -853,10 +910,10 @@ class ProviderEditPage extends React.Component {
           ) : null
         }
         {
-          this.state.provider.type === "WeChat Pay" ? (
+          (this.state.provider.type === "Alipay" || this.state.provider.type === "WeChat Pay") ? (
             <Row style={{marginTop: "20px"}} >
               <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
-                {Setting.getLabel("cert", "cert")} :
+                {Setting.getLabel(i18next.t("general:Cert"), i18next.t("general:Cert - Tooltip"))} :
               </Col>
               <Col span={22} >
                 <Input value={this.state.provider.cert} onChange={e => {
@@ -866,7 +923,6 @@ class ProviderEditPage extends React.Component {
             </Row>
           ) : null
         }
-        {this.getAppIdRow(this.state.provider)}
         <Row style={{marginTop: "20px"}} >
           <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
             {Setting.getLabel(i18next.t("provider:Provider URL"), i18next.t("provider:Provider URL - Tooltip"))} :

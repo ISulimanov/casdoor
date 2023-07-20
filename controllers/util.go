@@ -16,7 +16,6 @@ package controllers
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/casdoor/casdoor/conf"
 	"github.com/casdoor/casdoor/i18n"
@@ -56,6 +55,9 @@ func (c *ApiController) T(error string) string {
 // GetAcceptLanguage ...
 func (c *ApiController) GetAcceptLanguage() string {
 	language := c.Ctx.Request.Header.Get("Accept-Language")
+	if len(language) > 2 {
+		language = language[0:2]
+	}
 	return conf.GetLanguage(language)
 }
 
@@ -93,7 +95,12 @@ func (c *ApiController) RequireSignedInUser() (*object.User, bool) {
 		return nil, false
 	}
 
-	user := object.GetUser(userId)
+	user, err := object.GetUser(userId)
+	if err != nil {
+		c.ResponseError(err.Error())
+		return nil, false
+	}
+
 	if user == nil {
 		c.ClearUserSession()
 		c.ResponseError(fmt.Sprintf(c.T("general:The user: %s doesn't exist"), userId))
@@ -115,43 +122,67 @@ func (c *ApiController) RequireAdmin() (string, bool) {
 	return user.Owner, true
 }
 
-func getInitScore(organization *object.Organization) (int, error) {
-	if organization != nil {
-		return organization.InitScore, nil
-	} else {
-		return strconv.Atoi(conf.GetConfigString("initScore"))
+// IsMaskedEnabled ...
+func (c *ApiController) IsMaskedEnabled() (bool, bool) {
+	isMaskEnabled := true
+	withSecret := c.Input().Get("withSecret")
+	if withSecret == "1" {
+		isMaskEnabled = false
+
+		if conf.IsDemoMode() {
+			c.ResponseError(c.T("general:this operation is not allowed in demo mode"))
+			return false, isMaskEnabled
+		}
+
+		_, ok := c.RequireAdmin()
+		if !ok {
+			return false, isMaskEnabled
+		}
 	}
+
+	return true, isMaskEnabled
 }
 
-func (c *ApiController) GetProviderFromContext(category string) (*object.Provider, *object.User, bool) {
+func (c *ApiController) GetProviderFromContext(category string) (*object.Provider, error) {
 	providerName := c.Input().Get("provider")
 	if providerName != "" {
-		provider := object.GetProvider(util.GetId("admin", providerName))
-		if provider == nil {
-			c.ResponseError(fmt.Sprintf(c.T("util:The provider: %s is not found"), providerName))
-			return nil, nil, false
+		provider, err := object.GetProvider(util.GetId("admin", providerName))
+		if err != nil {
+			return nil, err
 		}
-		return provider, nil, true
+
+		if provider == nil {
+			err = fmt.Errorf(c.T("util:The provider: %s is not found"), providerName)
+			return nil, err
+		}
+
+		return provider, nil
 	}
 
 	userId, ok := c.RequireSignedIn()
 	if !ok {
-		return nil, nil, false
+		return nil, fmt.Errorf(c.T("general:Please login first"))
 	}
 
-	application, user := object.GetApplicationByUserId(userId)
+	application, err := object.GetApplicationByUserId(userId)
+	if err != nil {
+		return nil, err
+	}
+
 	if application == nil {
-		c.ResponseError(fmt.Sprintf(c.T("util:No application is found for userId: %s"), userId))
-		return nil, nil, false
+		return nil, fmt.Errorf(c.T("util:No application is found for userId: %s"), userId)
 	}
 
-	provider := application.GetProviderByCategory(category)
+	provider, err := application.GetProviderByCategory(category)
+	if err != nil {
+		return nil, err
+	}
+
 	if provider == nil {
-		c.ResponseError(fmt.Sprintf(c.T("util:No provider for category: %s is found for application: %s"), category, application.Name))
-		return nil, nil, false
+		return nil, fmt.Errorf(c.T("util:No provider for category: %s is found for application: %s"), category, application.Name)
 	}
 
-	return provider, user, true
+	return provider, nil
 }
 
 func checkQuotaForApplication(count int) error {

@@ -33,8 +33,20 @@ func CorsFilter(ctx *context.Context) {
 	origin := ctx.Input.Header(headerOrigin)
 	originConf := conf.GetConfigString("origin")
 
+	if ctx.Request.Method == "POST" && ctx.Request.RequestURI == "/api/login/oauth/access_token" {
+		ctx.Output.Header(headerAllowOrigin, origin)
+		ctx.Output.Header(headerAllowMethods, "POST, GET, OPTIONS, DELETE")
+		ctx.Output.Header(headerAllowHeaders, "Content-Type, Authorization")
+		return
+	}
+
 	if origin != "" && originConf != "" && origin != originConf {
-		if object.IsOriginAllowed(origin) {
+		ok, err := object.IsOriginAllowed(origin)
+		if err != nil {
+			panic(err)
+		}
+
+		if ok {
 			ctx.Output.Header(headerAllowOrigin, origin)
 			ctx.Output.Header(headerAllowMethods, "POST, GET, OPTIONS, DELETE")
 			ctx.Output.Header(headerAllowHeaders, "Content-Type, Authorization")

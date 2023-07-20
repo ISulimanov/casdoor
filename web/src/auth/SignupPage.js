@@ -28,6 +28,7 @@ import CustomGithubCorner from "../common/CustomGithubCorner";
 import LanguageSelect from "../common/select/LanguageSelect";
 import {withRouter} from "react-router-dom";
 import {CountryCodeSelect} from "../common/select/CountryCodeSelect";
+import * as PasswordChecker from "../common/PasswordChecker";
 
 const formItemLayout = {
   labelCol: {
@@ -107,8 +108,13 @@ class SignupPage extends React.Component {
     }
 
     ApplicationBackend.getApplication("admin", applicationName)
-      .then((application) => {
-        this.onUpdateApplication(application);
+      .then((res) => {
+        if (res.status === "error") {
+          Setting.showMessage("error", res.msg);
+          return;
+        }
+
+        this.onUpdateApplication(res);
       });
   }
 
@@ -165,6 +171,11 @@ class SignupPage extends React.Component {
 
   onFinish(values) {
     const application = this.getApplicationObj();
+
+    const params = new URLSearchParams(window.location.search);
+    values["plan"] = params.get("plan");
+    values["pricing"] = params.get("pricing");
+
     AuthBackend.signup(values)
       .then((res) => {
         if (res.status === "ok") {
@@ -453,8 +464,15 @@ class SignupPage extends React.Component {
           rules={[
             {
               required: required,
-              min: 6,
-              message: i18next.t("login:Please input your password, at least 6 characters!"),
+              validateTrigger: "onChange",
+              validator: (rule, value) => {
+                const errorMsg = PasswordChecker.checkPasswordComplexity(value, application.organizationObj.passwordOptions);
+                if (errorMsg === "") {
+                  return Promise.resolve();
+                } else {
+                  return Promise.reject(errorMsg);
+                }
+              },
             },
           ]}
           hasFeedback
@@ -594,6 +612,7 @@ class SignupPage extends React.Component {
         <CustomGithubCorner />
         <div className="login-content" style={{margin: this.props.preview ?? this.parseOffset(application.formOffset)}}>
           {Setting.inIframe() || Setting.isMobile() ? null : <div dangerouslySetInnerHTML={{__html: application.formCss}} />}
+          {Setting.inIframe() || !Setting.isMobile() ? null : <div dangerouslySetInnerHTML={{__html: application.formCssMobile}} />}
           <div className="login-panel" >
             <div className="side-image" style={{display: application.formOffset !== 4 ? "none" : null}}>
               <div dangerouslySetInnerHTML={{__html: application.formSideHtml}} />

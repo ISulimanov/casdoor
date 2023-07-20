@@ -25,11 +25,12 @@ import PopconfirmModal from "./common/modal/PopconfirmModal";
 class MessageListPage extends BaseListPage {
   newMessage() {
     const randomName = Setting.getRandomName();
+    const organizationName = Setting.getRequestOrganization(this.props.account);
     return {
       owner: "admin", // this.props.account.messagename,
       name: `message_${randomName}`,
       createdTime: moment().format(),
-      organization: this.props.account.owner,
+      organization: organizationName,
       chat: "",
       replyTo: "",
       author: `${this.props.account.owner}/${this.props.account.name}`,
@@ -78,6 +79,7 @@ class MessageListPage extends BaseListPage {
         dataIndex: "organization",
         key: "organization",
         width: "150px",
+        fixed: "left",
         sorter: true,
         ...this.getColumnSearchProps("organization"),
         render: (text, record, index) => {
@@ -119,7 +121,6 @@ class MessageListPage extends BaseListPage {
         dataIndex: "chat",
         key: "chat",
         width: "120px",
-        fixed: "left",
         sorter: true,
         ...this.getColumnSearchProps("chat"),
         render: (text, record, index) => {
@@ -135,7 +136,6 @@ class MessageListPage extends BaseListPage {
         dataIndex: "author",
         key: "author",
         width: "120px",
-        fixed: "left",
         sorter: true,
         ...this.getColumnSearchProps("author"),
         render: (text, record, index) => {
@@ -209,11 +209,13 @@ class MessageListPage extends BaseListPage {
       value = params.type;
     }
     this.setState({loading: true});
-    MessageBackend.getMessages("admin", Setting.isAdminUser(this.props.account) ? "" : this.props.account.owner, params.pagination.current, params.pagination.pageSize, field, value, sortField, sortOrder)
+    MessageBackend.getMessages("admin", Setting.isDefaultOrganizationSelected(this.props.account) ? "" : Setting.getRequestOrganization(this.props.account), params.pagination.current, params.pagination.pageSize, field, value, sortField, sortOrder)
       .then((res) => {
+        this.setState({
+          loading: false,
+        });
         if (res.status === "ok") {
           this.setState({
-            loading: false,
             data: res.data,
             pagination: {
               ...params.pagination,
@@ -225,9 +227,10 @@ class MessageListPage extends BaseListPage {
         } else {
           if (Setting.isResponseDenied(res)) {
             this.setState({
-              loading: false,
               isAuthorized: false,
             });
+          } else {
+            Setting.showMessage("error", res.msg);
           }
         }
       });

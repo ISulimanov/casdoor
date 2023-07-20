@@ -55,13 +55,8 @@ func isIpAddress(host string) bool {
 
 	// Attempt to parse the host as an IP address (both IPv4 and IPv6)
 	ip := net.ParseIP(hostWithoutPort)
-	if ip != nil {
-		// The host is an IP address
-		return true
-	}
-
-	// The host is not an IP address
-	return false
+	// if host is not nil is an IP address else is not an IP address
+	return ip != nil
 }
 
 func getOriginFromHost(host string) (string, string) {
@@ -70,10 +65,13 @@ func getOriginFromHost(host string) (string, string) {
 		return origin, origin
 	}
 
+	// "door.casdoor.com"
 	protocol := "https://"
-	if strings.HasPrefix(host, "localhost") {
+	if !strings.Contains(host, ".") {
+		// "localhost:8000" or "computer-name:80"
 		protocol = "http://"
 	} else if isIpAddress(host) {
+		// "192.168.0.10"
 		protocol = "http://"
 	}
 
@@ -115,12 +113,20 @@ func GetOidcDiscovery(host string) OidcDiscovery {
 }
 
 func GetJsonWebKeySet() (jose.JSONWebKeySet, error) {
-	certs := GetCerts("admin")
 	jwks := jose.JSONWebKeySet{}
+	certs, err := GetCerts("admin")
+	if err != nil {
+		return jwks, err
+	}
+
 	// follows the protocol rfc 7517(draft)
 	// link here: https://self-issued.info/docs/draft-ietf-jose-json-web-key.html
 	// or https://datatracker.ietf.org/doc/html/draft-ietf-jose-json-web-key
 	for _, cert := range certs {
+		if cert.Type != "x509" {
+			continue
+		}
+
 		certPemBlock := []byte(cert.Certificate)
 		certDerBlock, _ := pem.Decode(certPemBlock)
 		x509Cert, _ := x509.ParseCertificate(certDerBlock.Bytes)

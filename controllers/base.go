@@ -48,11 +48,23 @@ func (c *ApiController) IsGlobalAdmin() bool {
 
 func (c *ApiController) IsAdmin() bool {
 	isGlobalAdmin, user := c.isGlobalAdmin()
-	if user == nil {
+	if !isGlobalAdmin && user == nil {
 		return false
 	}
 
 	return isGlobalAdmin || user.IsAdmin
+}
+
+func (c *ApiController) IsAdminOrSelf(user2 *object.User) bool {
+	isGlobalAdmin, user := c.isGlobalAdmin()
+	if isGlobalAdmin || (user != nil && user.IsAdmin) {
+		return true
+	}
+
+	if user.Owner == user2.Owner && user.Name == user2.Name {
+		return true
+	}
+	return false
 }
 
 func (c *ApiController) isGlobalAdmin() (bool, *object.User) {
@@ -72,11 +84,16 @@ func (c *ApiController) isGlobalAdmin() (bool, *object.User) {
 
 func (c *ApiController) getCurrentUser() *object.User {
 	var user *object.User
+	var err error
 	userId := c.GetSessionUsername()
 	if userId == "" {
 		user = nil
 	} else {
-		user = object.GetUser(userId)
+		user, err = object.GetUser(userId)
+		if err != nil {
+			c.ResponseError(err.Error())
+			return nil
+		}
 	}
 	return user
 }
@@ -106,7 +123,12 @@ func (c *ApiController) GetSessionApplication() *object.Application {
 	if clientId == nil {
 		return nil
 	}
-	application := object.GetApplicationByClientId(clientId.(string))
+	application, err := object.GetApplicationByClientId(clientId.(string))
+	if err != nil {
+		c.ResponseError(err.Error())
+		return nil
+	}
+
 	return application
 }
 
@@ -168,20 +190,16 @@ func (c *ApiController) SetSessionData(s *SessionData) {
 	c.SetSession("SessionData", util.StructToJson(s))
 }
 
-func (c *ApiController) setMfaSessionData(data *object.MfaSessionData) {
-	c.SetSession(object.MfaSessionUserId, data.UserId)
+func (c *ApiController) setMfaUserSession(userId string) {
+	c.SetSession(object.MfaSessionUserId, userId)
 }
 
-func (c *ApiController) getMfaSessionData() *object.MfaSessionData {
-	userId := c.GetSession(object.MfaSessionUserId)
+func (c *ApiController) getMfaUserSession() string {
+	userId := c.Ctx.Input.CruSession.Get(object.MfaSessionUserId)
 	if userId == nil {
-		return nil
+		return ""
 	}
-
-	data := &object.MfaSessionData{
-		UserId: userId.(string),
-	}
-	return data
+	return userId.(string)
 }
 
 func (c *ApiController) setExpireForSession() {
@@ -192,8 +210,10 @@ func (c *ApiController) setExpireForSession() {
 	})
 }
 
-func wrapActionResponse(affected bool) *Response {
-	if affected {
+func wrapActionResponse(affected bool, e ...error) *Response {
+	if len(e) != 0 && e[0] != nil {
+		return &Response{Status: "error", Msg: e[0].Error()}
+	} else if affected {
 		return &Response{Status: "ok", Msg: "", Data: "Affected"}
 	} else {
 		return &Response{Status: "ok", Msg: "", Data: "Unaffected"}

@@ -16,7 +16,6 @@ package object
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -28,20 +27,10 @@ import (
 	goldap "github.com/go-ldap/ldap/v3"
 )
 
-var (
-	reWhiteSpace     *regexp.Regexp
-	reFieldWhiteList *regexp.Regexp
-)
-
 const (
 	SigninWrongTimesLimit     = 5
 	LastSignWrongTimeDuration = time.Minute * 15
 )
-
-func init() {
-	reWhiteSpace, _ = regexp.Compile(`\s`)
-	reFieldWhiteList, _ = regexp.Compile(`^[A-Za-z0-9]+$`)
-}
 
 func CheckUserSignup(application *Application, organization *Organization, form *form.AuthForm, lang string) string {
 	if organization == nil {
@@ -58,7 +47,7 @@ func CheckUserSignup(application *Application, organization *Organization, form 
 		if util.IsEmailValid(form.Username) {
 			return i18n.Translate(lang, "check:Username cannot be an email address")
 		}
-		if reWhiteSpace.MatchString(form.Username) {
+		if util.ReWhiteSpace.MatchString(form.Username) {
 			return i18n.Translate(lang, "check:Username cannot contain white spaces")
 		}
 
@@ -170,12 +159,20 @@ func CheckPassword(user *User, password string, lang string, options ...bool) st
 		}
 	}
 
-	organization := GetOrganizationByUser(user)
+	organization, err := GetOrganizationByUser(user)
+	if err != nil {
+		panic(err)
+	}
+
 	if organization == nil {
 		return i18n.Translate(lang, "check:Organization does not exist")
 	}
 
-	credManager := cred.GetCredManager(organization.PasswordType)
+	passwordType := user.PasswordType
+	if passwordType == "" {
+		passwordType = organization.PasswordType
+	}
+	credManager := cred.GetCredManager(passwordType)
 	if credManager != nil {
 		if organization.MasterPassword != "" {
 			if credManager.IsPasswordCorrect(password, organization.MasterPassword, "", organization.PasswordSalt) {
@@ -195,8 +192,22 @@ func CheckPassword(user *User, password string, lang string, options ...bool) st
 	}
 }
 
+func CheckPasswordComplexityByOrg(organization *Organization, password string) string {
+	errorMsg := checkPasswordComplexity(password, organization.PasswordOptions)
+	return errorMsg
+}
+
+func CheckPasswordComplexity(user *User, password string) string {
+	organization, _ := GetOrganizationByUser(user)
+	return CheckPasswordComplexityByOrg(organization, password)
+}
+
 func checkLdapUserPassword(user *User, password string, lang string) string {
-	ldaps := GetLdaps(user.Owner)
+	ldaps, err := GetLdaps(user.Owner)
+	if err != nil {
+		return err.Error()
+	}
+
 	ldapLoginSuccess := false
 	hit := false
 
@@ -207,7 +218,7 @@ func checkLdapUserPassword(user *User, password string, lang string) string {
 		}
 
 		searchReq := goldap.NewSearchRequest(ldapServer.BaseDn, goldap.ScopeWholeSubtree, goldap.NeverDerefAliases,
-			0, 0, false, ldapServer.buildFilterString(user), []string{}, nil)
+			0, 0, false, ldapServer.buildAuthFilterString(user), []string{}, nil)
 
 		searchResult, err := conn.Conn.Search(searchReq)
 		if err != nil {
@@ -243,8 +254,12 @@ func CheckUserPassword(organization string, username string, password string, la
 	if len(options) > 0 {
 		enableCaptcha = options[0]
 	}
-	user := GetUserByFields(organization, username)
-	if user == nil || user.IsDeleted == true {
+	user, err := GetUserByFields(organization, username)
+	if err != nil {
+		panic(err)
+	}
+
+	if user == nil || user.IsDeleted {
 		return nil, fmt.Sprintf(i18n.Translate(lang, "general:The user: %s doesn't exist"), util.GetId(organization, username))
 	}
 
@@ -268,10 +283,6 @@ func CheckUserPassword(organization string, username string, password string, la
 	return user, ""
 }
 
-func filterField(field string) bool {
-	return reFieldWhiteList.MatchString(field)
-}
-
 func CheckUserPermission(requestUserId, userId string, strict bool, lang string) (bool, error) {
 	if requestUserId == "" {
 		return false, fmt.Errorf(i18n.Translate(lang, "general:Please login first"))
@@ -280,8 +291,16 @@ func CheckUserPermission(requestUserId, userId string, strict bool, lang string)
 	userOwner := util.GetOwnerFromId(userId)
 
 	if userId != "" {
-		targetUser := GetUser(userId)
+		targetUser, err := GetUser(userId)
+		if err != nil {
+			panic(err)
+		}
+
 		if targetUser == nil {
+			if strings.HasPrefix(requestUserId, "built-in/") {
+				return true, nil
+			}
+
 			return false, fmt.Errorf(i18n.Translate(lang, "general:The user: %s doesn't exist"), userId)
 		}
 
@@ -292,7 +311,11 @@ func CheckUserPermission(requestUserId, userId string, strict bool, lang string)
 	if strings.HasPrefix(requestUserId, "app/") {
 		hasPermission = true
 	} else {
-		requestUser := GetUser(requestUserId)
+		requestUser, err := GetUser(requestUserId)
+		if err != nil {
+			return false, err
+		}
+
 		if requestUser == nil {
 			return false, fmt.Errorf(i18n.Translate(lang, "check:Session outdated, please login again"))
 		}
@@ -313,11 +336,19 @@ func CheckUserPermission(requestUserId, userId string, strict bool, lang string)
 }
 
 func CheckAccessPermission(userId string, application *Application) (bool, error) {
-	permissions := GetPermissions(application.Organization)
-	allowed := true
 	var err error
+	if userId == "built-in/admin" {
+		return true, nil
+	}
+
+	permissions, err := GetPermissions(application.Organization)
+	if err != nil {
+		return false, err
+	}
+
+	allowed := true
 	for _, permission := range permissions {
-		if !permission.IsEnabled || len(permission.Users) == 0 {
+		if !permission.IsEnabled {
 			continue
 		}
 
@@ -350,14 +381,9 @@ func CheckUsername(username string, lang string) string {
 		return i18n.Translate(lang, "check:Username is too long (maximum is 39 characters).")
 	}
 
-	exclude, _ := regexp.Compile("^[\u0021-\u007E]+$")
-	if !exclude.MatchString(username) {
-		return ""
-	}
-
 	// https://stackoverflow.com/questions/58726546/github-username-convention-using-regex
-	re, _ := regexp.Compile("^[a-zA-Z0-9]+((?:-[a-zA-Z0-9]+)|(?:_[a-zA-Z0-9]+))*$")
-	if !re.MatchString(username) {
+
+	if !util.ReUserName.MatchString(username) {
 		return i18n.Translate(lang, "check:The username may only contain alphanumeric characters, underlines or hyphens, cannot have consecutive hyphens or underlines, and cannot begin or end with a hyphen or underline.")
 	}
 
@@ -391,9 +417,9 @@ func CheckUpdateUser(oldUser, user *User, lang string) string {
 	return ""
 }
 
-func CheckToEnableCaptcha(application *Application, organization, username string) bool {
+func CheckToEnableCaptcha(application *Application, organization, username string) (bool, error) {
 	if len(application.Providers) == 0 {
-		return false
+		return false, nil
 	}
 
 	for _, providerItem := range application.Providers {
@@ -402,12 +428,15 @@ func CheckToEnableCaptcha(application *Application, organization, username strin
 		}
 		if providerItem.Provider.Category == "Captcha" {
 			if providerItem.Rule == "Dynamic" {
-				user := GetUserByFields(organization, username)
-				return user != nil && user.SigninWrongTimes >= SigninWrongTimesLimit
+				user, err := GetUserByFields(organization, username)
+				if err != nil {
+					return false, err
+				}
+				return user != nil && user.SigninWrongTimes >= SigninWrongTimesLimit, nil
 			}
-			return providerItem.Rule == "Always"
+			return providerItem.Rule == "Always", nil
 		}
 	}
 
-	return false
+	return false, nil
 }
