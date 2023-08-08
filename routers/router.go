@@ -284,5 +284,5 @@ func initAPI() {
 	beego.Router("/api/apply-blueprint", &controllers.ApiController{}, "POST:ApplyBlueprint")
 
 	beego.Router("/api/get-available-subscription-states", &controllers.ApiController{}, "GET:GetAvailableSubscriptionStates")
-
+	beego.Router("/api/get-available-fields", &controllers.ApiController{}, "GET:GetAvailableFields")
 }

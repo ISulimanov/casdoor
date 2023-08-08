@@ -34,6 +34,7 @@ var distributorAllowedUrls = map[string]bool{
 	"/api/update-subscription":               true,
 	"/api/get-user-application":              true,
 	"/api/get-available-subscription-states": true,
+	"/api/get-available-fields":              true,
 }
 
 func UserRoleFilter(ctx *context.Context) {

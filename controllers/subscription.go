@@ -221,3 +221,26 @@ func (c *ApiController) GetAvailableSubscriptionStates() {
 	c.Data["json"] = availableStates
 	c.ServeJSON()
 }
+
+// GetAvailableFields
+// @Title GetAvailableFields
+// @Tag Subscription API
+// @Description get available fields for current user
+// @Param   state     query    string  true        "The id ( owner/name ) of the subscription"
+// @Success 200 {object} string The Response object
+// @router /get-available-fields [get]
+func (c *ApiController) GetAvailableFields() {
+	state_input := c.Input().Get("state")
+	currentUser := c.getCurrentUser()
+	if currentUser == nil {
+		c.ResponseError(c.T("auth:Unauthorized operation"))
+		return
+	}
+	fields, err := pt_af_logic.GetAvailableFields(currentUser, state_input)
+	if err != nil {
+		c.ResponseError(err.Error())
+		return
+	}
+	c.Data["json"] = fields
+	c.ServeJSON()
+}

@@ -44,6 +44,18 @@ export function getSubscriptionAvailableStates(owner, name) {
   }).then(res => res.json());
 }
 
+export function getAvailableFields(state) {
+  return fetch(`${Setting.ServerUrl}/api/get-available-fields?state=${state}`, {
+    method: "GET",
+    credentials: "include",
+    headers: {
+      "Accept-Language": Setting.getAcceptLanguage(),
+    },
+  }).then(res => {
+    return res.json();
+  });
+}
+
 export function updateSubscription(owner, name, subscription) {
   const newSubscription = Setting.deepCopy(subscription);
   return fetch(`${Setting.ServerUrl}/api/update-subscription?id=${owner}/${encodeURIComponent(name)}`, {

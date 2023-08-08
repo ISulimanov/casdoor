@@ -351,6 +351,16 @@ func GetAvailableTransitions(user *object.User, subscription *object.Subscriptio
 	return roleAvailableTransitions, nil
 }
 
+func GetAvailableFields(user *object.User, state string) ([]PTAFLTypes.SubscriptionFieldName, error) {
+	subscriptionRole := GetUserRole(user)
+	subscription_state, ok := subscription_states.SubscriptionStateMap[PTAFLTypes.SubscriptionStateName(state)]
+	if !ok {
+		return nil, fmt.Errorf("incorrect state: %s", state)
+	}
+	permissions := subscription_state.FieldPermissions()[subscriptionRole]
+	return permissions, nil
+}
+
 func ProcessSubscriptionUpdate(ctx *context.Context, user *object.User, subscription, old *object.Subscription) (bool, error) {
 	err := ValidateSubscriptionUpdate(user, subscription, old)
 	if err != nil {

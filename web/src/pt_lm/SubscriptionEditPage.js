@@ -22,6 +22,22 @@ import * as Setting from "./../Setting";
 import i18next from "i18next";
 import dayjs from "dayjs";
 
+const Fields = {
+  NAME: "Name",
+  DISPLAY_NAME: "Display Name",
+  START_DATE: "Start Date",
+  END_DATE: "End Date",
+  USER: "User",
+  PLAN: "Plan",
+  DISCOUNT: "Discount",
+  DESCRIPTION: "Description",
+  COMMENT: "Comment",
+  WAS_PILOT: "WasPilot",
+  PILOT_EXPIRY_DATE: "PilotExpiryDate",
+  APPROVER: "Approver",
+  APPROVE_TIME: "Approve Time",
+};
+
 class SubscriptionEditPage extends React.Component {
   constructor(props) {
     super(props);
@@ -37,6 +53,7 @@ class SubscriptionEditPage extends React.Component {
       providers: [],
       mode: props.location.mode !== undefined ? props.location.mode : "edit",
       isGlobalAdmin: Setting.isAdminUser(props.account),
+      availableFields: {},
     };
   }
 
@@ -82,6 +99,7 @@ class SubscriptionEditPage extends React.Component {
         this.getUsers(subscription.owner);
         this.getPlanes(subscription.owner);
         this.getSubscriptionAvailableStates();
+        this.getAvailableFields(subscription.state);
       });
   }
 
@@ -109,6 +127,19 @@ class SubscriptionEditPage extends React.Component {
         this.setState({
           organizations: (res.msg === undefined) ? res : [],
         });
+      });
+  }
+
+  getAvailableFields(state) {
+    SubscriptionBackend.getAvailableFields(state)
+      .then((fields) => {
+        const availableFields = {};
+        if (fields !== null) {
+          fields.forEach((field, index) => {
+            availableFields[field] = index;
+          });
+        }
+        this.setState({availableFields});
       });
   }
 
@@ -170,6 +201,7 @@ class SubscriptionEditPage extends React.Component {
           <Col span={22} >
             <Select style={{width: "100%"}} value={this.state.subscription.user}
               onChange={(value => {this.updateSubscriptionField("user", value);})}
+              disabled={!Setting.isAdminUser(this.props.account) && !(Fields.USER in this.state.availableFields)}
               options={this.state.users.map((user) => Setting.getOption(`${user.owner}/${user.name}`, `${user.owner}/${user.name}`))}
             />
           </Col>
@@ -179,9 +211,11 @@ class SubscriptionEditPage extends React.Component {
             {Setting.getLabel(i18next.t("general:Display name"), i18next.t("general:Display name - Tooltip"))} :
           </Col>
           <Col span={22} >
-            <Input value={this.state.subscription.displayName} onChange={e => {
-              this.updateSubscriptionField("displayName", e.target.value);
-            }} />
+            <Input
+              value={this.state.subscription.displayName}
+              onChange={e => {this.updateSubscriptionField("displayName", e.target.value);}}
+              disabled={!Setting.isAdminUser(this.props.account) && !(Fields.DISPLAY_NAME in this.state.availableFields)}
+            />
           </Col>
         </Row>
         <Row style={{marginTop: "20px", display: "none"}} >
@@ -189,9 +223,10 @@ class SubscriptionEditPage extends React.Component {
             {Setting.getLabel(i18next.t("subscription:Duration"), i18next.t("subscription:Duration - Tooltip"))}
           </Col>
           <Col span={22} >
-            <InputNumber value={this.state.subscription.duration} onChange={value => {
-              this.updateSubscriptionField("duration", value);
-            }} />
+            <InputNumber
+              value={this.state.subscription.duration}
+              onChange={value => {this.updateSubscriptionField("duration", value);}}
+            />
           </Col>
         </Row>
         <Row style={{marginTop: "20px"}} >
@@ -199,9 +234,14 @@ class SubscriptionEditPage extends React.Component {
             {Setting.getLabel(i18next.t("general:Plan"), i18next.t("general:Plan - Tooltip"))} :
           </Col>
           <Col span={22} >
-            <Select virtual={false} style={{width: "100%"}} value={this.state.subscription.plan} onChange={(value => {this.updateSubscriptionField("plan", value);})}
-              options={this.state.planes.map((plan) => Setting.getOption(`${plan.owner}/${plan.name}`, `${plan.owner}/${plan.name}`))
-              } />
+            <Select
+              virtual={false}
+              style={{width: "100%"}}
+              value={this.state.subscription.plan}
+              onChange={(value => {this.updateSubscriptionField("plan", value);})}
+              options={this.state.planes.map((plan) => Setting.getOption(`${plan.owner}/${plan.name}`, `${plan.owner}/${plan.name}`))}
+              disabled={!Setting.isAdminUser(this.props.account) && !(Fields.PLAN in this.state.availableFields)}
+            />
           </Col>
         </Row>
         <Row style={{marginTop: "20px"}} >
@@ -220,6 +260,7 @@ class SubscriptionEditPage extends React.Component {
               {value: 35, name: "35"},
               {value: 40, name: "40"},
             ].map((item) => Setting.getOption(item.name, item.value))}
+            disabled={!Setting.isAdminUser(this.props.account) && !(Fields.DISCOUNT in this.state.availableFields)}
             />
           </Col>
         </Row>
@@ -228,43 +269,65 @@ class SubscriptionEditPage extends React.Component {
             {Setting.getLabel(i18next.t("general:Description"), i18next.t("general:Description - Tooltip"))} :
           </Col>
           <Col span={22} >
-            <Input value={this.state.subscription.description} onChange={e => {
-              this.updateSubscriptionField("description", e.target.value);
-            }} />
+            <Input
+              value={this.state.subscription.description}
+              onChange={e => {this.updateSubscriptionField("description", e.target.value);}}
+              disabled={!Setting.isAdminUser(this.props.account) && !(Fields.DESCRIPTION in this.state.availableFields)}
+            />
           </Col>
         </Row>
-        <Row style={{marginTop: "20px"}} >
+        <Row style={{marginTop: "20px"}}>
           <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
             {Setting.getLabel(i18next.t("general:Comment"), i18next.t("general:Comment - Tooltip"))} :
           </Col>
-          <Col span={22} >
-            <Input value={this.state.subscription.comment} onChange={e => {
-              this.updateSubscriptionField("comment", e.target.value);
-            }} />
+          <Col span={22}>
+            <Input
+              value={this.state.subscription.comment}
+              onChange={e => {
+                this.updateSubscriptionField("comment", e.target.value);
+              }}
+              disabled={!Setting.isAdminUser(this.props.account) && !(Fields.COMMENT in this.state.availableFields)}
+            />
           </Col>
         </Row>
-        <Row style={{marginTop: "20px"}} >
+        <Row style={{marginTop: "20px"}}>
           <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
             {Setting.getLabel(i18next.t("subscription:Start date"), i18next.t("subscription:Start date - Tooltip"))}
           </Col>
-          <Col span={22} >
-            <DatePicker value={this.state.subscription.startDate !== "0001-01-01T00:00:00Z" && this.state.subscription.startDate !== null ? dayjs(this.state.subscription.startDate) : null} onChange={value => {
-              this.updateSubscriptionField("startDate", value);
-            }} />
+          <Col span={22}>
+            <DatePicker
+              value={
+                this.state.subscription.startDate !== "0001-01-01T00:00:00Z" && this.state.subscription.startDate !== null
+                  ? dayjs(this.state.subscription.startDate)
+                  : null
+              }
+              onChange={value => {
+                this.updateSubscriptionField("startDate", value);
+              }}
+              disabled={!Setting.isAdminUser(this.props.account) && !(Fields.START_DATE in this.state.availableFields)}
+            />
           </Col>
         </Row>
-        <Row style={{marginTop: "20px"}} >
+        <Row style={{marginTop: "20px"}}>
           <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
             {Setting.getLabel(i18next.t("subscription:End date"), i18next.t("subscription:End date - Tooltip"))}
           </Col>
-          <Col span={22} >
-            <DatePicker value={this.state.subscription.endDate !== "0001-01-01T00:00:00Z" && this.state.subscription.endDate !== null ? dayjs(this.state.subscription.endDate) : null} onChange={value => {
-              this.updateSubscriptionField("endDate", value);
-            }} />
+          <Col span={22}>
+            <DatePicker
+              value={
+                this.state.subscription.endDate !== "0001-01-01T00:00:00Z" && this.state.subscription.endDate !== null
+                  ? dayjs(this.state.subscription.endDate)
+                  : null
+              }
+              onChange={value => {
+                this.updateSubscriptionField("endDate", value);
+              }}
+              disabled={!Setting.isAdminUser(this.props.account) && !(Fields.END_DATE in this.state.availableFields)}
+            />
           </Col>
         </Row>
-        <Row style={{marginTop: "20px"}} >
-          <Col style={{marginTop: "5px"}} span={(Setting.isMobile()) ? 22 : 2}>
+        <Row style={{marginTop: "20px"}}>
+          <Col style={{marginTop: "5px"}} span={Setting.isMobile() ? 22 : 2}>
             {Setting.getLabel(i18next.t("general:State"), i18next.t("general:State - Tooltip"))} :
           </Col>
           <Col span={22} >
@@ -281,7 +344,6 @@ class SubscriptionEditPage extends React.Component {
           </Col>
           <Col span={(Setting.isMobile()) ? 22 : 2} >
             <Select
-              disabled={!Setting.isAdminUser(this.props.account)}
               value={this.state.subscription.wasPilot}
               style={{width: 120}}
               onChange={value => {
@@ -291,6 +353,7 @@ class SubscriptionEditPage extends React.Component {
                 {value: true, label: "Да"},
                 {value: false, label: "Нет"},
               ]}
+              disabled={!Setting.isAdminUser(this.props.account) && !(Fields.WAS_PILOT in this.state.availableFields)}
             />
           </Col>
         </Row>
@@ -300,7 +363,7 @@ class SubscriptionEditPage extends React.Component {
           </Col>
           <Col span={22} >
             <DatePicker
-              disabled={!Setting.isAdminUser(this.props.account)}
+              disabled={!Setting.isAdminUser(this.props.account) && !(Fields.PILOT_EXPIRY_DATE in this.state.availableFields)}
               value={this.state.subscription.pilotExpiryDate !== null ? dayjs(this.state.subscription.pilotExpiryDate) : null}
               onChange={value => {
                 this.updateSubscriptionField("pilotExpiryDate", value);
